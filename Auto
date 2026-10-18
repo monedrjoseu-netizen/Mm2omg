@@ -1,0 +1,588 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+----------------------------------------------------
+-- CONFIGURATION & STATES
+----------------------------------------------------
+local Settings = {
+    EspEnabled = false,
+    AimlockMurderer = false,
+    AimlockSheriff = false,
+    AutoShoot = false,
+    AutoFarmCoins = false,
+    AutoFarmCandy = false,
+    AntiAfk = true,
+    KillAura = false,
+    KillAuraRange = 15,
+    AimFOV = 300,
+    AutoWin = false,
+    OutOftheMap = false
+}
+
+----------------------------------------------------
+-- 1. GLASSMORPHISM UI CREATION
+----------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Elscriptero_Scripts_Gui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- Main Card Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 660)
+MainFrame.Position = UDim2.new(0.5, -160, 0.2, -330)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+MainFrame.BackgroundTransparency = 0.05
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 18)
+MainUICorner.Parent = MainFrame
+
+-- Animated RGB Border Glow
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Thickness = 2.5
+UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+UIStroke.Parent = MainFrame
+
+local UIGradient = Instance.new("UIGradient")
+UIGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 200)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(170, 0, 255)),
+    ColorSequenceKeypoint.new(0.66, Color3.fromRGB(255, 0, 128)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 200))
+})
+UIGradient.Rotation = 0
+UIGradient.Parent = UIStroke
+
+-- Continuous Rotating Neon Border Animation
+task.spawn(function()
+    while true do
+        local tween = TweenService:Create(UIGradient, TweenInfo.new(3, Enum.EasingStyle.Linear), {Rotation = UIGradient.Rotation + 360})
+        tween:Play()
+        tween.Completed:Wait()
+    end
+end)
+
+-- Title Header
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -50, 0, 45)
+Title.Position = UDim2.new(0, 15, 0, 5)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "elscriptero Scripts"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+-- Minimize Button (-)
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Name = "MinimizeBtn"
+MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
+MinimizeBtn.Position = UDim2.new(1, -40, 0, 10)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Text = "—"
+MinimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+MinimizeBtn.TextSize = 14
+MinimizeBtn.AutoButtonColor = false
+MinimizeBtn.Parent = MainFrame
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 8)
+MinCorner.Parent = MinimizeBtn
+
+-- Floating Restore Button
+local RestoreBtn = Instance.new("TextButton")
+RestoreBtn.Name = "RestoreBtn"
+RestoreBtn.Size = UDim2.new(0, 170, 0, 40)
+RestoreBtn.Position = UDim2.new(0.05, 0, 0.1, 0)
+RestoreBtn.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+RestoreBtn.Font = Enum.Font.GothamBold
+RestoreBtn.Text = "⚡ elscriptero Scripts"
+RestoreBtn.TextColor3 = Color3.fromRGB(0, 255, 200)
+RestoreBtn.TextSize = 12
+RestoreBtn.Visible = false
+RestoreBtn.Parent = ScreenGui
+
+local RestoreCorner = Instance.new("UICorner")
+RestoreCorner.CornerRadius = UDim.new(0, 12)
+RestoreCorner.Parent = RestoreBtn
+
+local RestoreStroke = Instance.new("UIStroke")
+RestoreStroke.Thickness = 2
+RestoreStroke.Color = Color3.fromRGB(0, 255, 200)
+RestoreStroke.Parent = RestoreBtn
+
+----------------------------------------------------
+-- MINIMIZE / MAXIMIZE LOGIC
+----------------------------------------------------
+MinimizeBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 320, 0, 0)
+    }):Play()
+    task.wait(0.3)
+    MainFrame.Visible = false
+    RestoreBtn.Visible = true
+end)
+
+RestoreBtn.MouseButton1Click:Connect(function()
+    RestoreBtn.Visible = false
+    MainFrame.Visible = true
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 320, 0, 660)
+    }):Play()
+end)
+
+----------------------------------------------------
+-- HELPER BUTTON BUILDERS
+----------------------------------------------------
+local function createToggleButton(name, text, yOffset, defaultState, callback)
+    local Btn = Instance.new("TextButton")
+    Btn.Name = name
+    Btn.Size = UDim2.new(0.88, 0, 0, 35)
+    Btn.Position = UDim2.new(0.06, 0, 0, yOffset)
+    Btn.BackgroundColor3 = defaultState and Color3.fromRGB(20, 50, 35) or Color3.fromRGB(22, 22, 32)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.Text = text .. (defaultState and " [ON]" or " [OFF]")
+    Btn.TextColor3 = defaultState and Color3.fromRGB(80, 255, 140) or Color3.fromRGB(220, 80, 80)
+    Btn.TextSize = 12
+    Btn.AutoButtonColor = false
+    Btn.Parent = MainFrame
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 10)
+    Corner.Parent = Btn
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Thickness = 1.5
+    Stroke.Color = defaultState and Color3.fromRGB(80, 255, 140) or Color3.fromRGB(220, 80, 80)
+    Stroke.Parent = Btn
+
+    local state = defaultState
+
+    Btn.MouseEnter:Connect(function()
+        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0.91, 0, 0, 37), Position = UDim2.new(0.045, 0, 0, yOffset - 1)}):Play()
+    end)
+    Btn.MouseLeave:Connect(function()
+        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0.88, 0, 0, 35), Position = UDim2.new(0.06, 0, 0, yOffset)}):Play()
+    end)
+
+    Btn.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            Btn.Text = text .. " [ON]"
+            Btn.TextColor3 = Color3.fromRGB(80, 255, 140)
+            Stroke.Color = Color3.fromRGB(80, 255, 140)
+            Btn.BackgroundColor3 = Color3.fromRGB(20, 50, 35)
+        else
+            Btn.Text = text .. " [OFF]"
+            Btn.TextColor3 = Color3.fromRGB(220, 80, 80)
+            Stroke.Color = Color3.fromRGB(220, 80, 80)
+            Btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+        end
+        callback(state)
+    end)
+    return Btn
+end
+
+local function createActionButton(name, text, yOffset, callback)
+    local Btn = Instance.new("TextButton")
+    Btn.Name = name
+    Btn.Size = UDim2.new(0.88, 0, 0, 35)
+    Btn.Position = UDim2.new(0.06, 0, 0, yOffset)
+    Btn.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.Text = text
+    Btn.TextColor3 = Color3.fromRGB(180, 130, 255)
+    Btn.TextSize = 12
+    Btn.AutoButtonColor = false
+    Btn.Parent = MainFrame
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 10)
+    Corner.Parent = Btn
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Thickness = 1.5
+    Stroke.Color = Color3.fromRGB(180, 130, 255)
+    Stroke.Parent = Btn
+
+    Btn.MouseEnter:Connect(function()
+        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0.91, 0, 0, 37), Position = UDim2.new(0.045, 0, 0, yOffset - 1)}):Play()
+    end)
+    Btn.MouseLeave:Connect(function()
+        TweenService:Create(Btn, TweenInfo.new(0.2), {Size = UDim2.new(0.88, 0, 0, 35), Position = UDim2.new(0.06, 0, 0, yOffset)}):Play()
+    end)
+
+    Btn.MouseButton1Click:Connect(function()
+        TweenService:Create(Btn, TweenInfo.new(0.1), {Size = UDim2.new(0.85, 0, 0, 33)}):Play()
+        task.wait(0.1)
+        TweenService:Create(Btn, TweenInfo.new(0.1), {Size = UDim2.new(0.88, 0, 0, 35)}):Play()
+        callback()
+    end)
+end
+
+----------------------------------------------------
+-- 2. DRAGGABLE LOGIC FOR BOTH FRAMES
+----------------------------------------------------
+local function makeDraggable(frame)
+    local dragging, dragInput, dragStart, startPos
+    local function updateDrag(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then updateDrag(input) end
+    end)
+end
+
+makeDraggable(MainFrame)
+makeDraggable(RestoreBtn)
+
+----------------------------------------------------
+-- 3. ANTI-AFK SYSTEM
+----------------------------------------------------
+LocalPlayer.Idled:Connect(function()
+    if Settings.AntiAfk then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+    end
+end)
+
+----------------------------------------------------
+-- 4. ROLE ESP & AIMBOT UTILITIES
+----------------------------------------------------
+local function removeHighlight(player)
+    if player.Character and player.Character:FindFirstChild("MM2_Highlight") then
+        player.Character.MM2_Highlight:Destroy()
+    end
+end
+
+local function applyHighlight(player, color)
+    if not player.Character then return end
+    local highlight = player.Character:FindFirstChild("MM2_Highlight")
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "MM2_Highlight"
+        highlight.FillTransparency = 0.45
+        highlight.OutlineTransparency = 0
+        highlight.Parent = player.Character
+    end
+    highlight.FillColor = color
+    highlight.OutlineColor = color
+end
+
+local function checkRole(player)
+    if not player.Character then return nil end
+    local backpack = player:FindFirstChildOfClass("Backpack")
+    local items = {}
+    if backpack then for _, v in ipairs(backpack:GetChildren()) do table.insert(items, v) end end
+    for _, v in ipairs(player.Character:GetChildren()) do table.insert(items, v) end
+
+    for _, item in ipairs(items) do
+        if item:IsA("Tool") then
+            if item.Name == "Knife" or item:FindFirstChild("Knife") then
+                return "Murderer"
+            elseif item.Name == "Gun" or item:FindFirstChild("Gun") then
+                return "Sheriff"
+            end
+        end
+    end
+    return "Innocent"
+end
+
+local function getAimbotTarget(targetRole)
+    local targetPlayer = nil
+    local shortestDistance = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            if checkRole(player) == targetRole then
+                local head = player.Character.Head
+                local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if distance < Settings.AimFOV and distance < shortestDistance then
+                        shortestDistance = distance
+                        targetPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    return targetPlayer
+end
+
+----------------------------------------------------
+-- 5. KILL AURA LOGIC (SAFE: MURDERER ONLY)
+----------------------------------------------------
+local lastAuraAttack = 0
+
+local function executeKillAura()
+    if not Settings.KillAura then return end
+    local myRole = checkRole(LocalPlayer)
+    if myRole ~= "Murderer" then return end
+
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    local tool = character:FindFirstChildOfClass("Tool")
+    if not tool or tool.Name ~= "Knife" then return end
+
+    local hrp = character.HumanoidRootPart
+
+    for _, enemy in ipairs(Players:GetPlayers()) do
+        if enemy ~= LocalPlayer and enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
+            local enemyHrp = enemy.Character.HumanoidRootPart
+            local distance = (hrp.Position - enemyHrp.Position).Magnitude
+
+            if distance <= Settings.KillAuraRange then
+                local currentTime = tick()
+                if currentTime - lastAuraAttack > 0.3 then
+                    lastAuraAttack = currentTime
+                    tool:Activate()
+                    local remote = tool:FindFirstChild("Stab") or tool:FindFirstChild("ServerControl")
+                    if remote and remote:IsA("RemoteEvent") then
+                        remote:FireServer(enemyHrp.Position)
+                    end
+                end
+            end
+        end
+    end
+end
+
+----------------------------------------------------
+-- 6. AUTO FARM LOGIC (COINS & CANDY)
+----------------------------------------------------
+local function farmCollectable(containerName)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = character.HumanoidRootPart
+
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == containerName or obj.Name == (containerName .. "Server") or (obj:IsA("BasePart") and obj.Name:find(containerName)) then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                local targetPart = obj:IsA("BasePart") and obj or obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if targetPart and targetPart:IsDescendantOf(Workspace) then
+                    hrp.CFrame = targetPart.CFrame
+                    task.wait(0.12)
+                    break
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.15)
+        if Settings.AutoFarmCoins then farmCollectable("Coin") end
+        if Settings.AutoFarmCandy then farmCollectable("Candy") end
+    end
+end)
+
+----------------------------------------------------
+-- 7. AUTO WIN LOGIC (FIXED CONFLICT WITH OUT-OF-MAP)
+----------------------------------------------------
+local isAutoWinning = false
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if Settings.AutoWin and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local myRole = checkRole(LocalPlayer)
+            local hrp = LocalPlayer.Character.HumanoidRootPart
+            
+            local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+            local knife = LocalPlayer.Character:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife")
+
+            if myRole == "Murderer" and knife then
+                isAutoWinning = true
+                for _, enemy in ipairs(Players:GetPlayers()) do
+                    if enemy ~= LocalPlayer and enemy.Character and enemy.Character:FindFirstChild("HumanoidRootPart") then
+                        hrp.CFrame = enemy.Character.HumanoidRootPart.CFrame + Vector3.new(0, 0, 2)
+                        knife.Parent = LocalPlayer.Character
+                        knife:Activate()
+                        task.wait(0.1)
+                    end
+                end
+                isAutoWinning = false
+            elseif myRole == "Sheriff" and gun then
+                for _, enemy in ipairs(Players:GetPlayers()) do
+                    if enemy ~= LocalPlayer and checkRole(enemy) == "Murderer" and enemy.Character and enemy.Character:FindFirstChild("Head") then
+                        isAutoWinning = true
+                        gun.Parent = LocalPlayer.Character
+                        hrp.CFrame = enemy.Character.HumanoidRootPart.CFrame + Vector3.new(0, 0, 3)
+                        local headPos = enemy.Character.Head.Position
+                        Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
+                        
+                        gun:Activate()
+                        local shootRemote = gun:FindFirstChild("Shoot") or gun:FindFirstChild("ServerControl")
+                        if shootRemote and shootRemote:IsA("RemoteEvent") then
+                            shootRemote:FireServer(headPos)
+                        end
+                        task.wait(0.5)
+                        isAutoWinning = false
+                        break
+                    end
+                end
+            end
+        end
+    end
+end)
+
+----------------------------------------------------
+-- 8. UI BUTTON CREATION
+----------------------------------------------------
+
+createToggleButton("EspToggle", "Role ESP (🔴 Knife | 🔵 Gun)", 50, false, function(state)
+    Settings.EspEnabled = state
+    if not state then for _, p in ipairs(Players:GetPlayers()) do removeHighlight(p) end end
+end)
+
+createToggleButton("AutoWinToggle", "🏆 Auto Win (Instant Round Clear)", 92, false, function(state)
+    Settings.AutoWin = state
+end)
+
+createToggleButton("OutMapToggle", "🌌 Out of Map (Void Sky Position)", 134, false, function(state)
+    Settings.OutOftheMap = state
+end)
+
+createToggleButton("AimMurdererToggle", "🎯 Aimlock: Murderer", 176, false, function(state)
+    Settings.AimlockMurderer = state
+end)
+
+createToggleButton("AimSheriffToggle", "🎯 Aimlock: Sheriff", 218, false, function(state)
+    Settings.AimlockSheriff = state
+end)
+
+createToggleButton("AutoShootToggle", "🔫 Auto Shoot (When Locked)", 260, false, function(state)
+    Settings.AutoShoot = state
+end)
+
+createToggleButton("KillAuraToggle", "🗡️ Kill Aura (Murderer Only)", 302, false, function(state)
+    Settings.KillAura = state
+end)
+
+createToggleButton("AntiAfkToggle", "🛡️ Anti-AFK Kick Protection", 344, true, function(state)
+    Settings.AntiAfk = state
+end)
+
+createToggleButton("AutoCoinToggle", "🪙 Auto Farm Coins", 386, false, function(state)
+    Settings.AutoFarmCoins = state
+end)
+
+createToggleButton("AutoCandyToggle", "🍬 Auto Farm Candy (Halloween)", 428, false, function(state)
+    Settings.AutoFarmCandy = state
+end)
+
+createActionButton("GrabGunBtn", "⚡ Teleport to Dropped Gun", 470, function()
+    -- Enhanced global gun search that ignores distance from the void
+    local droppedGun = nil
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "GunDrop" or obj.Name == "Gun" then
+            if obj:IsA("BasePart") or obj:IsA("Model") then
+                droppedGun = obj
+                break
+            end
+        end
+    end
+
+    if droppedGun and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local targetCFrame = droppedGun:IsA("BasePart") and droppedGun.CFrame or droppedGun.PrimaryPart or droppedGun:FindFirstChildWhichIsA("BasePart").CFrame
+        if targetCFrame then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = targetCFrame + Vector3.new(0, 3, 0)
+        end
+    end
+end)
+
+----------------------------------------------------
+-- 9. MAIN RENDER LOOP
+----------------------------------------------------
+local lastShotTime = 0
+
+RunService.RenderStepped:Connect(function()
+    -- Out of Map Loop (Paused automatically when Auto Win is actively executing)
+    if Settings.OutOftheMap and not isAutoWinning and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        hrp.CFrame = CFrame.new(hrp.Position.X, 500, hrp.Position.Z)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    end
+
+    -- ESP Loop
+    if Settings.EspEnabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local role = checkRole(player)
+                if role == "Murderer" then
+                    applyHighlight(player, Color3.fromRGB(255, 30, 30))
+                elseif role == "Sheriff" then
+                    applyHighlight(player, Color3.fromRGB(0, 150, 255))
+                else
+                    removeHighlight(player)
+                end
+            end
+        end
+    end
+
+    -- Kill Aura Loop
+    executeKillAura()
+
+    -- Aimlock & Auto-Shoot Loop
+    local target = nil
+    if Settings.AimlockMurderer then
+        target = getAimbotTarget("Murderer")
+    elseif Settings.AimlockSheriff then
+        target = getAimbotTarget("Sheriff")
+    end
+
+    if target and target.Character and target.Character:FindFirstChild("Head") then
+        local headPos = target.Character.Head.Position
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
+
+        if Settings.AutoShoot and LocalPlayer.Character then
+            local gun = LocalPlayer.Character:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")
+            if gun and (tick() - lastShotTime >= 0.1) then
+                lastShotTime = tick()
+                if gun.Parent == LocalPlayer.Backpack then
+                    gun.Parent = LocalPlayer.Character
+                end
+                gun:Activate()
+                local shootRemote = gun:FindFirstChild("Shoot") or gun:FindFirstChild("ServerControl")
+                if shootRemote and shootRemote:IsA("RemoteEvent") then
+                    shootRemote:FireServer(headPos)
+                end
+            end
+        end
+    end
+end)
